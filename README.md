@@ -4,7 +4,7 @@ The idea of this repo is to create a portfolio of all the different aspects
 where I have some relevant experience. Currently, these are the following areas
 where I have experience:
 
-- [Machine Learning (and Data Science in general)](/Ml/README.md)
+- [Machine Learning (and Data Science in general)](/ML/README.md)
 - Web Development
 - Mobile Development
 - Game Development

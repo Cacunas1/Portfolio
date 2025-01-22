@@ -149,21 +149,49 @@ feature_importance = pl.DataFrame(
 # Sort and display top features
 feature_importance = feature_importance.sort("importance", descending=True)
 print("\nTop 20 Most Important Features:")
-print(feature_importance.head(20).cast(pl.String))
+with pl.Config(
+    tbl_cell_numeric_alignment="RIGHT",
+    thousands_separator=",",
+    decimal_separator=".",
+    float_precision=3,
+    tbl_rows=-1,
+):
+    print(feature_importance.head(20))
 
 # %%
 # Additional analysis: Separate numeric and categorical feature importance
-numeric_importance = feature_importance[
-    feature_importance.select(pl.col("feature").is_in(numeric_features))
-]
-categorical_importance = feature_importance[
-    ~feature_importance.select(pl.col("feature").is_in(numeric_features))
-]
+# numeric_importance = feature_importance[
+#     feature_importance.select(pl.col("feature").is_in(numeric_features))
+# ]
+# categorical_importance = feature_importance[
+#     ~feature_importance.select(pl.col("feature").is_in(numeric_features))
+# ]
+numeric_importance: pl.DataFrame = feature_importance.filter(
+    pl.col("feature").is_in(numeric_features)
+)
+categorical_importance: pl.DataFrame = feature_importance.filter(
+    ~pl.col("feature").is_in(numeric_features)
+)
+
 
 # %%
 print("\nTop 10 Most Important Numeric Features:")
-print(numeric_importance.head(10))
+with pl.Config(
+    tbl_cell_numeric_alignment="RIGHT",
+    thousands_separator=",",
+    decimal_separator=".",
+    float_precision=3,
+    tbl_rows=-1,
+):
+    print(numeric_importance.head(10))
 
 # %%
 print("\nTop 10 Most Important Categorical Features:")
-print(categorical_importance.head(10))
+with pl.Config(
+    tbl_cell_numeric_alignment="RIGHT",
+    thousands_separator=",",
+    decimal_separator=".",
+    float_precision=3,
+    tbl_rows=-1,
+):
+    print(categorical_importance.head(10))

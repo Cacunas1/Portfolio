@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # ---
 # jupyter:
 #   jupytext:
@@ -16,131 +16,178 @@
 # ---
 
 # %%
-# %%
 import os
 
 # %%
-from sklearn.linear_model import LinearRegression, RidgeCV
-from sklearn.model_selection import train_test_split, cross_val_score, KFold
-from sklearn.metrics import mean_squared_error
-import polars as pl
 import numpy as np
+import polars as pl
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import RidgeCV  # LassoCV
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import KFold, cross_val_score, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OrdinalEncoder  # OneHotEncoder
 
 # %%
-import matplotlib.pyplot as plt
+# Load data
+data_fp: str = os.path.join("..", "data", "AmesHousing.csv")
+df: pl.DataFrame = pl.read_csv(data_fp)
 
 # %%
-from sklearn.metrics import accuracy_score, roc_auc_score
-
+# Separate numeric and categorical columns
+numeric_features = df.select(pl.col(pl.Int64) | pl.col(pl.Float64)).columns
+categorical_features = df.select(pl.col(pl.String)).columns
 
 # %%
-def main():
-    data_fp: str = os.path.join("..", "data", "AmesHousing.csv")
+# Remove target and ID columns
+features_to_exclude = ["Order", "PID", "SalePrice"]
+numeric_features = [col for col in numeric_features if col not in features_to_exclude]
+categorical_features = [
+    col for col in categorical_features if col not in features_to_exclude
+]
 
-    df: pl.DataFrame = pl.read_csv(data_fp)
+# %%
+# Create preprocessing pipelines
+numeric_transformer = Pipeline(
+    steps=[("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
+)
 
-    print(f"df:\n{df.head()}")
-
-    for col in df.columns:
-        print(f"\t- {col}")
-
-    # X: pl.DataFrame = df.select(pl.exclude("SalePrice"))
-    # y: pl.DataFrame = df.select
-
-    # split the data for testing and cross-validation
-    FEATURES: list[str] = [
-        "MS SubClass",
-        "MS Zoning",
-        "Lot Frontage",
-        "Lot Area",
-        "Street",
-        "Alley",
-        "Lot Shape",
-        "Land Contour",
-        "Utilities",
-        "Lot Config",
-        "Land Slope",
-        "Neighborhood",
-        "Condition 1",
-        "Condition 2",
-        "Bldg Type",
-        "House Style",
-        "Overall Qual",
-        "Overall Cond",
-        "Year Built",
-        "Year Remod/Add",
-        "Roof Style",
-        "Roof Matl",
-        "Exterior 1st",
-        "Exterior 2nd",
-        "Mas Vnr Type",
-        "Mas Vnr Area",
-        "Exter Qual",
-        "Exter Cond",
-        "Foundation",
-        "Bsmt Qual",
-        "Bsmt Cond",
-        "Bsmt Exposure",
-        "RsmtFin Type 1",
-        "BsmtFin SF 1",
-        "BsmtFin Type 2",
-        "BsmtFin SF 2",
-        "Bsmt Unf SF",
-        "Total Bsmt SF",
-        "Heating",
-        "Heating QC",
-        "Central Air",
-        "Electrical",
-        "1st Flr SF",
-        "2nd Flr SF",
-        "Low Qual Fin SF",
-        "Gr Liv Area",
-        "Bsmt Full Bath",
-        "Bsmt Half Bath",
-        "Full Bath",
-        "Half Bath",
-        "Bedroom AbvGr",
-        "Kitchen AbvGr",
-        "Kitchen Qual",
-        "TotRms AbvGrd",
-        "Functional",
-        "Fireplaces",
-        "Fireplace Qu",
-        "Garage Type",
-        "Garage Yr Blt",
-        "Garage Finish",
-        "Garage Cars",
-        "Garage Area",
-        "Garage Qual",
-        "Garage Cond",
-        "Paved Drive",
-        "Wood Deck SF",
-        "Open Porch SF",
-        "Enclosed Porch",
-        "3Ssn Porch",
-        "Screen Porch",
-        "Pool Area",
-        "Pool QC",
-        "Fence",
-        "Misc Feature",
-        "Misc Val",
-        "Mo Sold",
-        "Yr Sold",
-        "Sale Type",
-        "Sale Condition",
+# %%
+categorical_transformer = Pipeline(
+    steps=[
+        ("imputer", SimpleImputer(strategy="constant", fill_value="missing")),
+        (
+            "ordinal",
+            OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
+        ),
     ]
-
-    TARGET: str = "SalePrice"
-
-    X: pl.DataFrame = df.select(FEATURES)
-    y: pl.DataFrame = df.select(TARGET)
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=69)
+)
 
 
 # %%
-type(X_train)
+# Combine preprocessing steps
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", numeric_transformer, numeric_features),
+        ("cat", categorical_transformer, categorical_features),
+    ]
+)
 
 # %%
-if __name__ == "__main__":
-    main()
+# Create modeling pipeline with Ridge regression
+model = Pipeline(
+    steps=[
+        ("preprocessor", preprocessor),
+        ("regressor", RidgeCV(alphas=[0.1, 1.0, 10.0, 100.0])),
+    ]
+)
+
+# %%
+# Prepare data
+X = df.drop(["Order", "PID", "SalePrice"])
+y = df["SalePrice"]
+
+# %%
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.33, random_state=69
+)
+
+# %%
+# Cross-validation
+kfold = KFold(n_splits=10, shuffle=True, random_state=69)
+cv_scores = cross_val_score(
+    model, X_train, y_train, cv=kfold, scoring="neg_mean_squared_error"
+)
+
+# %%
+# Print cross-validation results
+mean_cv_score = -cv_scores.mean()
+print(f"Mean CV MSE: {mean_cv_score:,.2f}")
+
+# %%
+# Fit model
+model.fit(X_train, y_train)
+
+# %%
+# Make predictions
+y_pred = model.predict(X_test)
+
+# %%
+# Calculate metrics
+test_mse = mean_squared_error(y_test, y_pred)
+test_rmse = np.sqrt(test_mse)
+r2 = r2_score(y_test, y_pred)
+
+# %%
+print(f"Test MSE: {test_mse:,.2f}")
+print(f"Test RMSE: {test_rmse:,.2f}")
+print(f"R² Score: {r2:.4f}")
+
+# %%
+# Get feature names after preprocessing
+feature_names = numeric_features + [
+    f"{feature}_{val}"
+    for feature, vals in zip(
+        categorical_features,
+        model.named_steps["preprocessor"]
+        .named_transformers_["cat"]
+        .named_steps["ordinal"]
+        .categories_,
+    )
+    for val in vals[1:]
+]  # Skip first category due to drop='first'
+
+# %%
+# Create feature importance DataFrame
+feature_importance = pl.DataFrame(
+    {
+        "feature": X_train.columns,
+        "importance": abs(model.named_steps["regressor"].coef_),
+    }
+)
+
+# %%
+# Sort and display top features
+feature_importance = feature_importance.sort("importance", descending=True)
+print("\nTop 20 Most Important Features:")
+with pl.Config(
+    tbl_cell_numeric_alignment="RIGHT",
+    thousands_separator=",",
+    decimal_separator=".",
+    float_precision=3,
+    tbl_rows=-1,
+):
+    print(feature_importance.head(20))
+
+# %%
+numeric_importance: pl.DataFrame = feature_importance.filter(
+    pl.col("feature").is_in(numeric_features)
+)
+categorical_importance: pl.DataFrame = feature_importance.filter(
+    ~pl.col("feature").is_in(numeric_features)
+)
+
+
+# %%
+print("\nTop 10 Most Important Numeric Features:")
+with pl.Config(
+    tbl_cell_numeric_alignment="RIGHT",
+    thousands_separator=",",
+    decimal_separator=".",
+    float_precision=3,
+    tbl_rows=-1,
+):
+    print(numeric_importance.head(10))
+
+# %%
+print("\nTop 10 Most Important Categorical Features:")
+with pl.Config(
+    tbl_cell_numeric_alignment="RIGHT",
+    thousands_separator=",",
+    decimal_separator=".",
+    float_precision=3,
+    tbl_rows=-1,
+):
+    print(categorical_importance.head(10))

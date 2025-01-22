@@ -23,7 +23,7 @@ import numpy as np
 import polars as pl
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import RidgeCV  # LassoCV
+from sklearn import svm
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
@@ -79,7 +79,7 @@ preprocessor = ColumnTransformer(
 model = Pipeline(
     steps=[
         ("preprocessor", preprocessor),
-        ("regressor", RidgeCV(alphas=[0.1, 1.0, 10.0, 100.0])),
+        ("regressor", svm.SVR()),
     ]
 )
 
@@ -144,7 +144,7 @@ feature_names = numeric_features + [
 feature_importance = pl.DataFrame(
     {
         "feature": X_train.columns,
-        "importance": abs(model.named_steps["regressor"].coef_),
+        "importance": abs(model.named_steps["regressor"].coef0),
     }
 )
 
@@ -191,3 +191,4 @@ with pl.Config(
     tbl_rows=-1,
 ):
     print(categorical_importance.head(10))
+

@@ -60,13 +60,19 @@ df.describe()
 df.head()
 
 # %%
-fig, ax = plt.subplots()
-ax.plot(
-    df.sort("Lot Area").select("Lot Area"),
-    df.sort("Lot Area").select("SalePrice"),
-)
-ax.grid()
-plt.show()
+rcol = "House Style"
+ht_cats = df.get_column(rcol).unique().to_list()
+print(ht_cats)
+
+for cat in ht_cats:
+    aux = df.filter(pl.col(rcol) == pl.lit(cat))
+    fig, ax = plt.subplots()
+    ax.plot(
+        aux.sort("Lot Area").select("Lot Area"),
+        aux.sort("Lot Area").select("SalePrice"),
+    )
+    ax.grid()
+    plt.show()
 
 # %% [markdown]
 # ## Transform (preprocessing)
